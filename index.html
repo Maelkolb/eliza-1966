@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ELIZA 1966</title>
+<meta name="description" content="Weizenbaums ELIZA mit dem DOCTOR-Skript von 1966, im Browser, mit Röntgenblick auf die Regeln.">
+<style>
+:root {
+  color-scheme: light;
+  --ink: #2B2B2B;
+  --ink-2: #555555;
+  --muted: #8A8A8A;
+  --line: #DDDDDD;
+  --paper: #FBFAF6;
+  --accent: #C46F00;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: #fff; color: var(--ink); font: 16px/1.5 Arial, "Helvetica Neue", Helvetica, sans-serif; }
+header { border-bottom: 1px solid var(--line); }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+header .wrap { padding-top: 18px; padding-bottom: 14px; }
+h1 { margin: 0; font-size: 24px; font-style: italic; color: #555; }
+header p { margin: 4px 0 0; color: var(--ink-2); }
+main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; padding-top: 22px; padding-bottom: 40px; align-items: start; }
+.tty { background: var(--paper); border: 1px solid var(--line); }
+.log { padding: 18px 22px 8px; font: 17px/1.55 "Courier New", Courier, monospace; height: 62vh; min-height: 380px; overflow-y: auto; }
+.user { color: #707070; margin: 0 0 2px; }
+.user::before { content: "> "; color: #B0B0B0; }
+.bot { font-weight: bold; margin: 0 0 16px; }
+.note-line { font: italic 14px Arial, sans-serif; color: var(--muted); margin: 4px 0 16px; }
+.x { font: 14px/1.6 Arial, sans-serif; color: var(--ink-2); border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; margin: -10px 0 18px; }
+.x div { margin: 1px 0; }
+.x b { color: var(--ink); font-weight: bold; }
+.x code { font: 14px "Courier New", monospace; color: var(--ink); }
+.x .p { font: 14px "Courier New", monospace; color: var(--ink); }
+.x .p sup { font: bold 10px Arial, sans-serif; color: var(--accent); margin: 0 1px; }
+.x .sep { color: #BBBBBB; margin: 0 6px; }
+.x .hl { color: var(--accent); font-weight: bold; }
+form { display: flex; gap: 8px; border-top: 1px solid var(--line); padding: 12px; background: #fff; }
+input[type=text] { flex: 1; min-width: 0; font: 17px "Courier New", monospace; padding: 10px 12px; border: 1px solid #C8C8C8; border-radius: 3px; }
+input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+button { font: inherit; cursor: pointer; background: #fff; color: var(--ink); border: 1px solid #C8C8C8; border-radius: 3px; padding: 9px 14px; }
+button:hover { border-color: #777; }
+button.send { background: var(--ink); color: #fff; border-color: var(--ink); }
+aside h2 { font-size: 15px; margin: 0 0 6px; }
+aside section { margin: 0 0 24px; }
+aside ol { margin: 0; padding-left: 20px; }
+aside li { margin: 0 0 6px; }
+aside p { margin: 6px 0 0; font-size: 14px; color: var(--ink-2); }
+label.sw { display: flex; gap: 10px; align-items: center; font-weight: bold; cursor: pointer; }
+label.sw input { width: 18px; height: 18px; accent-color: var(--accent); }
+.tries { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.tries button { border: none; padding: 2px 0; font: 15px "Courier New", monospace; color: #3A5A8A; text-decoration: underline; text-underline-offset: 3px; background: none; text-align: left; }
+details { margin-top: 10px; }
+summary { cursor: pointer; color: var(--ink-2); }
+pre { font: 12px/1.35 "Courier New", monospace; background: var(--paper); border: 1px solid var(--line); padding: 10px; max-height: 50vh; overflow: auto; white-space: pre; }
+footer .wrap { font-size: 12px; color: var(--muted); padding-bottom: 28px; }
+@media (max-width: 860px) {
+  main .wrap { grid-template-columns: 1fr; }
+  .log { height: 55vh; }
+}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>ELIZA, 1966</h1>
+  <p>Joseph Weizenbaums Programm mit dem vollständigen DOCTOR-Skript aus seinem Aufsatz von 1966. ELIZA versteht nur Englisch und antwortet in Großbuchstaben, wie damals auf dem Fernschreiber.</p>
+</div></header>
+
+<main><div class="wrap">
+  <div class="tty">
+    <div class="log" id="log" aria-live="polite"></div>
+    <form id="form" autocomplete="off">
+      <input id="inp" type="text" placeholder="Write in English …" aria-label="Ihre Eingabe">
+      <button class="send" type="submit">Senden</button>
+    </form>
+  </div>
+
+  <aside>
+    <section>
+      <h2>Aufgabe, zu zweit</h2>
+      <ol>
+        <li>Unterhalten Sie sich drei Minuten mit ELIZA.</li>
+        <li>Finden Sie einen Satz, auf den ELIZA verblüffend gut antwortet, und einen, an dem sie scheitert.</li>
+        <li>Wenn Zeit bleibt: Schalten Sie den Röntgenblick ein. Warum kam jeweils diese Antwort?</li>
+      </ol>
+    </section>
+    <section>
+      <label class="sw"><input type="checkbox" id="xray"> Röntgenblick</label>
+      <p>Zeigt unter jeder Antwort, nach welcher Regel sie entstanden ist: Schlüsselwort und Rang, Muster mit den gezählten Teilen, Vorlage.</p>
+    </section>
+    <section>
+      <h2>Zum Ausprobieren</h2>
+      <div class="tries" id="tries"></div>
+    </section>
+    <section>
+      <h2>Das Original</h2>
+      <div class="tries">
+        <button id="replay">Gespräch von 1966 abspielen</button>
+        <button id="reset">Neues Gespräch</button>
+      </div>
+      <details><summary>Das DOCTOR-Skript ansehen</summary><pre id="script"></pre></details>
+    </section>
+  </aside>
+</div></main>
+
+<footer><div class="wrap">
+  Skript: Weizenbaum, Joseph (1966): ELIZA. In: Communications of the ACM 9 (1), S. 36–45, Anhang; Abschrift und Rekonstruktion des Programmablaufs von Anthony Hay (github.com/anthay/ELIZA, CC0). Die Seite reproduziert das Gespräch aus dem Aufsatz wörtlich. Alles läuft im Browser; Eingaben werden nirgends gespeichert oder verschickt.
+</div></footer>
+
+<script>
+// ELIZA mit Weizenbaums DOCTOR-Skript aus dem Anhang von CACM 9 (1), 1966.
+// Ablauf nach Weizenbaum (1966) und der Rekonstruktion von Anthony Hay
+// (github.com/anthay/ELIZA, CC0): Satzteile, Schlüsselwortstapel, Zerlegung,
+// Umbau, PRE, NEWKEY, MEMORY mit SLIP-HASH, Zähler LIMIT.
+// Jede Antwort liefert zusätzlich eine Spur (trace) für den Röntgenblick.
+
+function tokenizeScript(text) {
+  const lines = text.split("\n").filter((l) => !l.trim().startsWith(";"));
+  return lines.join("\n").match(/\(|\)|[^\s()]+/g) || [];
+}
+
+function parseLists(tokens) {
+  const stack = [[]];
+  for (const t of tokens) {
+    if (t === "(") stack.push([]);
+    else if (t === ")") { const done = stack.pop(); stack[stack.length - 1].push(done); }
+    else stack[stack.length - 1].push(t);
+  }
+  return stack[0];
+}
+
+const isNum = (x) => typeof x === "string" && /^\d+$/.test(x);
+// (=WHAT) oder (= WHAT): Verweis auf ein anderes Schlüsselwort
+const linkTarget = (x) => {
+  if (!Array.isArray(x)) return null;
+  if (x.length === 1 && typeof x[0] === "string" && x[0].startsWith("=") && x[0].length > 1) return x[0].slice(1);
+  if (x.length === 2 && x[0] === "=" && typeof x[1] === "string") return x[1];
+  return null;
+};
+
+// --- SLIP HASH (Mitte des Quadrats) auf dem letzten Wort, wie in Hays Rekonstruktion ---
+const BCD = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", null, "=", "'", null, null, null,
+  "+", "A", "B", "C", "D", "E", "F", "G", "H", "I", null, ".", ")", null, null, null,
+  "-", "J", "K", "L", "M", "N", "O", "P", "Q", "R", null, "$", "*", null, null, null,
+  " ", "/", "S", "T", "U", "V", "W", "X", "Y", "Z", null, ",", "(", null, null, null];
+const TO_BCD = {};
+BCD.forEach((c, i) => { if (c !== null) TO_BCD[c.charCodeAt(0)] = i; });
+
+function lastChunkAsBcd(word) {
+  const bytes = Array.from(new TextEncoder().encode(word));
+  let r = 0n, count = 0;
+  const append = (b) => { r = (r << 6n) | BigInt(TO_BCD[b] !== undefined ? TO_BCD[b] : (b & 0x3f)); };
+  if (bytes.length) {
+    for (let i = Math.floor((bytes.length - 1) / 6) * 6; i < bytes.length; i++, count++) append(bytes[i]);
+  }
+  while (count++ < 6) append(32);
+  return r;
+}
+
+function slipHash(d, n) {
+  d &= 0x7FFFFFFFFn;
+  d = (d * d) & 0xFFFFFFFFFFFFFFFFn;
+  d >>= BigInt(35 - Math.floor(n / 2));
+  return Number(d & ((1n << BigInt(n)) - 1n));
+}
+
+// --- Eingabe aufbereiten ---
+function elizaUppercase(s) {
+  let out = "";
+  for (const ch of s) {
+    const c = ch.codePointAt(0);
+    if (c === 0x2019) out += "'";
+    else if ([0x2018, 0x60, 0x22, 0xab, 0xbb, 0x201a, 0x201b, 0x201c, 0x201d, 0x201e, 0x201f, 0x2039, 0x203a, 0xa1, 0xbf].includes(c)) out += " ";
+    else if (c === 0x21 || c === 0x3f) out += ".";
+    else if ([0x3a, 0x3b, 0x2013, 0x2014].includes(c)) out += ",";
+    else if (c === 0xdf) out += "SS";
+    else out += ch.toUpperCase();
+  }
+  return out;
+}
+
+function splitInput(s) {
+  const out = [];
+  let w = "";
+  for (const ch of s) {
+    if (ch === " " || ch === "," || ch === ".") {
+      if (w) { out.push(w); w = ""; }
+      if (ch !== " ") out.push(ch);
+    } else w += ch;
+  }
+  if (w) out.push(w);
+  return out;
+}
+
+const NOMATCH = ["PLEASE CONTINUE", "HMMM", "GO ON , PLEASE", "I SEE"];
+
+class Eliza {
+  constructor(scriptText) {
+    const items = parseLists(tokenizeScript(scriptText));
+    this.greeting = items[0].join(" ");
+    this.rules = {};      // Schlüsselwort -> {rank, subst, tags, trans: [{decomp, reasm, next}], link}
+    this.memoryRule = null;
+    for (const e of items.slice(1)) {
+      if (!Array.isArray(e)) continue; // START
+      const key = e[0];
+      if (key === "MEMORY") {
+        this.memoryRule = { key: e[1], trans: e.slice(2).map((m) => { const i = m.indexOf("="); return { decomp: m.slice(0, i), reasm: m.slice(i + 1) }; }) };
+        continue;
+      }
+      // NONE liegt unter einem internen Namen, damit das Wort „none“ in der Eingabe kein Schlüsselwort ist
+      const r = { key: key === "NONE" ? "zNONE" : key, rank: 0, subst: null, tags: [], trans: [], link: null };
+      let i = 1;
+      while (i < e.length) {
+        const x = e[i];
+        if (x === "=") { r.subst = e[i + 1]; i += 2; continue; }
+        if (isNum(x)) r.rank = parseInt(x, 10);
+        else if (x === "DLIST") {
+          r.tags = e[i + 1].join(" ").replace(/^\/\s*/, "").split(/\s+/).filter(Boolean);
+          i += 2; continue;
+        } else if (typeof x === "string" && x.startsWith("DLIST")) {
+          r.tags = e[i + 1].join(" ").replace(/^\/\s*/, "").split(/\s+/).filter(Boolean);
+          i += 2; continue;
+        } else if (Array.isArray(x)) {
+          if (linkTarget(x)) r.link = linkTarget(x);
+          else r.trans.push({ decomp: x[0], reasm: x.slice(1), next: 0 });
+        }
+        i += 1;
+      }
+      this.rules[r.key] = r;
+    }
+    this.tags = {};
+    for (const r of Object.values(this.rules)) for (const t of r.tags) (this.tags[t] = this.tags[t] || []).push(r.key);
+    this.reset();
+  }
+
+  reset() {
+    this.memories = [];
+    this.limit = 1;
+    for (const r of Object.values(this.rules)) for (const t of r.trans) t.next = 0;
+  }
+
+  hasTransformation(r) { return r.trans.length > 0 || !!r.link; }
+
+  inList(word, group) {
+    let toks = group.join(" ").trim();
+    if (toks.startsWith("*")) return toks.slice(1).trim().split(/\s+/).includes(word);
+    if (toks.startsWith("/")) {
+      for (const tag of toks.slice(1).trim().split(/\s+/)) if ((this.tags[tag] || []).includes(word)) return true;
+    }
+    return false;
+  }
+
+  // Zerlegung: liefert die Teile als Strings (Wörter mit Leerzeichen verbunden) oder null
+  match(pattern, words) {
+    if (!pattern.length) return words.length ? null : [];
+    const p = pattern[0], rest = pattern.slice(1);
+    if (Array.isArray(p) || !isNum(p)) {
+      if (!words.length) return null;
+      const w = words[0];
+      if (Array.isArray(p)) { if (!this.inList(w, p)) return null; }
+      else if (p !== w) return null;
+      const m = this.match(rest, words.slice(1));
+      return m ? [w].concat(m) : null;
+    }
+    const n = parseInt(p, 10);
+    if (n === 0) {
+      for (let k = 0; k <= words.length; k++) {
+        const m = this.match(rest, words.slice(k));
+        if (m) return [words.slice(0, k).join(" ")].concat(m);
+      }
+      return null;
+    }
+    if (words.length < n) return null;
+    const m = this.match(rest, words.slice(n));
+    return m ? [words.slice(0, n).join(" ")].concat(m) : null;
+  }
+
+  static reassemble(rule, parts) {
+    const out = [];
+    for (const r of rule) {
+      if (isNum(r)) {
+        const n = parseInt(r, 10);
+        if (n === 0 || n > parts.length) out.push("HMMM");
+        else out.push(...parts[n - 1].split(" ").filter(Boolean));
+      } else out.push(r);
+    }
+    return out;
+  }
+
+  createMemory(keyword, words, trace) {
+    const m = this.memoryRule;
+    if (!m || keyword !== m.key || !words.length) return;
+    const t = m.trans[slipHash(lastChunkAsBcd(words[words.length - 1]), 2)];
+    const parts = this.match(t.decomp, words);
+    if (!parts) return;
+    const mem = Eliza.reassemble(t.reasm, parts).join(" ");
+    this.memories.push(mem);
+    trace.memoryCreated = mem;
+  }
+
+  apply(rule, words, trace) {
+    let hit = null, parts = null;
+    for (const t of rule.trans) { parts = this.match(t.decomp, words); if (parts) { hit = t; break; } }
+    if (!hit) {
+      if (!rule.link) return { act: "inapplicable" };
+      trace.steps.push({ key: rule.key, link: rule.link });
+      return { act: "link", key: rule.link };
+    }
+    const index = hit.next, count = hit.reasm.length;
+    const reasm = hit.reasm[hit.next];
+    hit.next = (hit.next + 1) % hit.reasm.length;
+    const step = { key: rule.key, decomp: hit.decomp, parts, reasm, index, count };
+    trace.steps.push(step);
+    if (reasm.length === 1 && reasm[0] === "NEWKEY") { step.newkey = true; return { act: "newkey" }; }
+    if (linkTarget(reasm)) { step.linkTo = linkTarget(reasm); return { act: "link", key: step.linkTo }; }
+    if (reasm[0] === "PRE") {
+      const nw = Eliza.reassemble(reasm[1], parts);
+      step.pre = { template: reasm[1], result: nw.slice(), linkTo: linkTarget(reasm[2]) };
+      return { act: "link", key: step.pre.linkTo, words: nw };
+    }
+    return { act: "complete", words: Eliza.reassemble(reasm, parts) };
+  }
+
+  respond(input) {
+    let words = splitInput(elizaUppercase(input));
+    const trace = { input, steps: [], substitutions: [] };
+    this.limit = (this.limit % 4) + 1;
+
+    const keystack = [];
+    let top = 0;
+    let i = 0;
+    while (i < words.length) {
+      const w = words[i];
+      if (w === "," || w === "." || w === "BUT") {
+        if (!keystack.length) { words = words.slice(i + 1); i = 0; continue; }
+        words = words.slice(0, i); break;
+      }
+      const r = this.rules[w];
+      if (r) {
+        if (this.hasTransformation(r)) {
+          if (r.rank > top) { keystack.unshift(w); top = r.rank; }
+          else keystack.push(w);
+        }
+        if (r.subst) { trace.substitutions.push(i); words[i] = r.subst; }
+      }
+      i++;
+    }
+    trace.clause = words.slice();
+    trace.keywords = keystack.map((k) => ({ word: k, rank: this.rules[k].rank }));
+
+    const finish = (reply, mode) => { trace.reply = reply; trace.mode = mode; return { reply, trace }; };
+
+    if (!keystack.length && this.limit === 4 && this.memories.length) {
+      const mem = this.memories.shift();
+      return finish(mem, "memory");
+    }
+    while (keystack.length) {
+      const k = keystack.shift();
+      const rule = this.rules[k];
+      if (!rule) return finish(NOMATCH[this.limit - 1], "nomatch");
+      this.createMemory(k, words, trace);
+      const res = this.apply(rule, words, trace);
+      if (res.act === "complete") return finish(res.words.join(" "), "rule");
+      if (res.act === "inapplicable") return finish(NOMATCH[this.limit - 1], "nomatch");
+      if (res.act === "link") { if (res.words) words = res.words; keystack.unshift(res.key); }
+      else if (res.act === "newkey" && !keystack.length) break;
+    }
+    const none = this.rules["zNONE"];
+    const res = this.apply(none, words, trace);
+    return finish(res.words.join(" "), "none");
+  }
+}
+
+
+
+const DOCTOR = ";\n; APPENDIX. An Eliza Script\n;\n; Transcribed from Joseph Weizenbaum's article on page 36 of the January\n; 1966 edition of Communications of the ACM titled 'ELIZA - A Computer\n; Program For the Study of Natural Language Communication Between Man And\n; Machine'.\n;\n; \"Keywords and their associated transformation rules constitute the\n; SCRIPT for a particular class of conversation. An important property of\n; ELIZA is that a script is data; i.e., it is not part of the program\n; itself.\" -- From the above mentioned article.\n;\n; Transcribed by Anthony Hay, December 2020\n;\n;\n; Notes\n;\n; This is a verbatim transcription of the ELIZA script in the above\n; mentioned CACM article, with the following caveats:\n; a) Whitespace has been added to help reveal the structure of the\n;    script.\n; b) In the appendix six lines were printed twice adjacent to each other\n;    (with exactly 34 lines between each duplicate), making the structure\n;    nonsensical. These duplicates have been commented out of this\n;    transcription.\n; c) There were no comments in the script in the CACM article.\n;\n;\n; Weizenbaum says \"An ELIZA script consists mainly of a set of list\n; structures...\" and that ELIZA was written in MAD-Slip. He didn't publish\n; it at the time, but a version of the source code has now been found in\n; the Weizenbaum archives at MIT. See elizagen.org.\n;\n\n\n(HOW DO YOU DO.  PLEASE TELL ME YOUR PROBLEM)\n\nSTART\n\n(SORRY\n    ((0)\n        (PLEASE DON'T APOLIGIZE)\n        (APOLOGIES ARE NOT NECESSARY)\n        (WHAT FEELINGS DO YOU HAVE WHEN YOU APOLOGIZE)\n        (I'VE TOLD YOU THAT APOLOGIES ARE NOT REQUIRED)))\n\n(DONT = DON'T)\n(CANT = CAN'T)\n(WONT = WON'T)\n\n(REMEMBER 5\n    ((0 YOU REMEMBER 0)\n         (DO YOU OFTEN THINK OF 4)\n         (DOES THINKING OF 4 BRING ANYTHING ELSE TO MIND)\n         (WHAT ELSE DO YOU REMEMBER)\n         (WHY DO YOU REMEMBER 4 JUST NOW)\n         (WHAT IN THE PRESENT SITUATION REMINDS YOU OF 4)\n         (WHAT IS THE CONNECTION BETWEEN ME AND 4))\n    ((0 DO I REMEMBER 0)\n         (DID YOU THINK I WOULD FORGET 5)\n         (WHY DO YOU THINK I SHOULD RECALL 5 NOW)\n         (WHAT ABOUT 5)\n         (=WHAT)\n         (YOU MENTIONED 5))\n    ((0)\n         (NEWKEY)))\n\n(IF 3\n    ((0 IF 0)\n        (DO YOU THINK ITS LIKELY THAT 3)\n        (DO YOU WISH THAT 3)\n        (WHAT DO YOU THINK ABOUT 3)\n        (REALLY, 2 3)))\n; duplicate line removed: (WHAT DO YOU THINK ABOUT 3) (REALLY, 2 3)))\n\n(DREAMT 4\n    ((0 YOU DREAMT 0)\n        (REALLY, 4)\n        (HAVE YOU EVER FANTASIED 4 WHILE YOU WERE AWAKE)\n        (HAVE YOU DREAMT 4 BEFORE)\n        (=DREAM)\n        (NEWKEY)))\n\n(DREAMED = DREAMT 4 (=DREAMT))\n\n(DREAM 3\n    ((0)\n        (WHAT DOES THAT DREAM SUGGEST TO YOU)\n        (DO YOU DREAM OFTEN)\n        (WHAT PERSONS APPEAR IN YOUR DREAMS)\n        (DON'T YOU BELIEVE THAT DREAM HAS SOMETHING TO DO WITH YOUR PROBLEM)\n        (NEWKEY)))\n\n(DREAMS = DREAM 3 (=DREAM))\n\n(HOW (=WHAT))\n(WHEN (=WHAT))\n(ALIKE 10 (=DIT))\n(SAME 10 (=DIT))\n(CERTAINLY (=YES))\n\n(FEEL DLIST(/BELIEF))\n(THINK DLIST(/BELIEF))\n(BELIEVE DLIST(/BELIEF))\n(WISH DLIST(/BELIEF))\n\n(MEMORY MY\n    (0 YOUR 0 = LETS DISCUSS FURTHER WHY YOUR 3)\n    (0 YOUR 0 = EARLIER YOU SAID YOUR 3)\n    (0 YOUR 0 = BUT YOUR 3)\n    (0 YOUR 0 = DOES THAT HAVE ANYTHING TO DO WITH THE FACT THAT YOUR 3))\n\n(NONE\n    ((0)\n        (I AM NOT SURE I UNDERSTAND YOU FULLY)\n        (PLEASE GO ON)\n        (WHAT DOES THAT SUGGEST TO YOU)\n        (DO YOU FEEL STRONGLY ABOUT DISCUSSING SUCH THINGS)))\n\n(PERHAPS\n    ((0)\n        (YOU DON'T SEEM QUITE CERTAIN)\n        (WHY THE UNCERTAIN TONE)\n        (CAN'T YOU BE MORE POSITIVE)\n        (YOU AREN'T SURE)\n        (DON'T YOU KNOW)))\n\n(MAYBE (=PERHAPS))\n\n(NAME 15\n    ((0)\n        (I AM NOT INTERESTED IN NAMES)\n        (I'VE TOLD YOU BEFORE, I DON'T CARE ABOUT NAMES - PLEASE CONTINUE)))\n; duplicate line removed: PLEASE CONTINUE)) )\n\n(DEUTSCH (=XFREMD))\n(FRANCAIS (=XFREMD))\n(ITALIANO (=XFREMD))\n(ESPANOL (=XFREMD))\n\n(XFREMD\n    ((0)\n        (I AM SORRY, I SPEAK ONLY ENGLISH)))\n\n(HELLO\n    ((0)\n        (HOW DO YOU DO.  PLEASE STATE YOUR PROBLEM)))\n\n(COMPUTER 50\n    ((0)\n        (DO COMPUTERS WORRY YOU)\n        (WHY DO YOU MENTION COMPUTERS)\n        (WHAT DO YOU THINK MACHINES HAVE TO DO WITH YOUR PROBLEM)\n        (DON'T YOU THINK COMPUTERS CAN HELP PEOPLE)\n        (WHAT ABOUT MACHINES WORRIES YOU)\n        (WHAT DO YOU THINK ABOUT MACHINES)))\n\n(MACHINE 50 (=COMPUTER))\n(MACHINES 50 (=COMPUTER))\n(COMPUTERS 50 (=COMPUTER))\n\n(AM = ARE\n    ((0 ARE YOU 0)\n        (DO YOU BELIEVE YOU ARE 4)\n        (WOULD YOU WANT TO BE 4)\n        (YOU WISH I WOULD TELL YOU YOU ARE 4)\n        (WHAT WOULD IT MEAN IF YOU WERE 4)\n        (=WHAT))\n    ((0)\n        (WHY DO YOU SAY 'AM')\n        (I DON'T UNDERSTAND THAT)))\n\n(ARE\n    ((0 ARE I 0)\n        (WHY ARE YOU INTERESTED IN WHETHER I AM 4 OR NOT)\n        (WOULD YOU PREFER IF I WEREN'T 4)\n        (PERHAPS I AM 4 IN YOUR FANTASIES)\n        (DO YOU SOMETIMES THINK I AM 4)\n        (=WHAT))\n    ((0 ARE 0)\n        (DID YOU THINK THEY MIGHT NOT BE 3)\n        (WOULD YOU LIKE IT IF THEY WERE NOT 3)\n        (WHAT IF THEY WERE NOT 3)\n        (POSSIBLY THEY ARE 3)))\n\n(YOUR = MY\n    ((0 MY 0)\n        (WHY ARE YOU CONCERNED OVER MY 3)\n        (WHAT ABOUT YOUR OWN 3)\n        (ARE YOU WORRIED ABOUT SOMEONE ELSES 3)\n        (REALLY, MY 3)))\n\n(WAS 2\n    ((0 WAS YOU 0)\n        (WHAT IF YOU WERE 4)\n        (DO YOU THINK YOU WERE 4)\n        (WERE YOU 4)\n        (WHAT WOULD IT MEAN IF YOU WERE 4)\n        (WHAT DOES ' 4 ' SUGGEST TO YOU)\n        (=WHAT))\n    ((0 YOU WAS 0)\n        (WERE YOU REALLY)\n        (WHY DO YOU TELL ME YOU WERE 4 NOW)\n; duplicate line removed: (WERE YOU REALLY) (WHY DO YOU TELL ME YOU WERE 4 NOW)\n        (PERHAPS I ALREADY KNEW YOU WERE 4))\n    ((0 WAS I 0)\n        (WOULD YOU LIKE TO BELIEVE I WAS 4)\n        (WHAT SUGGESTS THAT I WAS 4)\n        (WHAT DO YOU THINK)\n        (PERHAPS I WAS 4)\n        (WHAT IF I HAD BEEN 4))\n    ((0)\n        (NEWKEY)))\n\n(WERE = WAS (=WAS))\n(ME = YOU)\n\n(YOU'RE = I'M\n    ((0 I'M 0)\n        (PRE (I ARE 3) (=YOU))))\n\n(I'M = YOU'RE\n    ((0 YOU'RE 0)\n        (PRE (YOU ARE 3) (=I))))\n\n(MYSELF = YOURSELF)\n(YOURSELF = MYSELF)\n\n(MOTHER DLIST(/NOUN FAMILY))\n(MOM = MOTHER DLIST(/ FAMILY))\n(DAD = FATHER DLIST(/ FAMILY))\n(FATHER DLIST(/NOUN FAMILY))\n(SISTER DLIST(/FAMILY))\n(BROTHER DLIST(/FAMILY))\n(WIFE DLIST(/FAMILY))\n(CHILDREN DLIST(/FAMILY))\n\n(I = YOU\n    ((0 YOU (* WANT NEED) 0)\n        (WHAT WOULD IT MEAN TO YOU IF YOU GOT 4)\n        (WHY DO YOU WANT 4)\n        (SUPPOSE YOU GOT 4 SOON)\n        (WHAT IF YOU NEVER GOT 4)\n        (WHAT WOULD GETTING 4 MEAN TO YOU)\n        (WHAT DOES WANTING 4 HAVE TO DO WITH THIS DISCUSSION))\n    ((0 YOU ARE 0 (*SAD UNHAPPY DEPRESSED SICK ) 0)\n        (I AM SORRY TO HEAR YOU ARE 5)\n        (DO YOU THINK COMING HERE WILL HELP YOU NOT TO BE 5)\n        (I'M SURE ITS NOT PLEASANT TO BE 5)\n        (CAN YOU EXPLAIN WHAT MADE YOU 5))\n    ((0 YOU ARE 0 (*HAPPY ELATED GLAD BETTER) 0)\n        (HOW HAVE I HELPED YOU TO BE 5)\n        (HAS YOUR TREATMENT MADE YOU 5)\n        (WHAT MAKES YOU 5 JUST NOW)\n        (CAN YOU EXPLAIN WHY YOU ARE SUDDENLY 5))\n    ((0 YOU WAS 0)\n        (=WAS))\n; duplicate line removed: ((0 YOU WAS 0) (=WAS))\n    ((0 YOU (/BELIEF) YOU 0)\n        (DO YOU REALLY THINK SO)\n        (BUT YOU ARE NOT SURE YOU 5)\n        (DO YOU REALLY DOUBT YOU 5))\n    ((0 YOU 0 (/BELIEF) 0 I 0)\n        (=YOU))\n    ((0 YOU ARE 0)\n        (IS IT BECAUSE YOU ARE 4 THAT YOU CAME TO ME)\n        (HOW LONG HAVE YOU BEEN 4)\n        (DO YOU BELIEVE IT NORMAL TO BE 4)\n        (DO YOU ENJOY BEING 4))\n    ((0 YOU (* CAN'T CANNOT) 0)\n        (HOW DO YOU KNOW YOU CAN'T 4)\n        (HAVE YOU TRIED)\n        (PERHAPS YOU COULD 4 NOW)\n        (DO YOU REALLY WANT TO BE ABLE TO 4))\n    ((0 YOU DON'T 0)\n        (DON'T YOU REALLY 4)\n        (WHY DON'T YOU 4)\n        (DO YOU WISH TO BE ABLE TO 4)\n        (DOES THAT TROUBLE YOU))\n    ((0 YOU FEEL 0)\n        (TELL ME MORE ABOUT SUCH FEELINGS)\n        (DO YOU OFTEN FEEL 4)\n        (DO YOU ENJOY FEELING 4)\n        (OF WHAT DOES FEELING 4 REMIND YOU))\n    ((0 YOU 0 I 0)\n        (PERHAPS IN YOUR FANTASY WE 3 EACH OTHER)\n        (DO YOU WISH TO 3 ME)\n        (YOU SEEM TO NEED TO 3 ME)\n        (DO YOU 3 ANYONE ELSE))\n    ((0)\n        (YOU SAY 1)\n        (CAN YOU ELABORATE ON THAT)\n        (DO YOU SAY 1 FOR SOME SPECIAL REASON)\n        (THAT'S QUITE INTERESTING)))\n\n(YOU = I\n    ((0 I REMIND YOU OF 0)\n        (=DIT))\n    ((0 I ARE 0)\n        (WHAT MAKES YOU THINK I AM 4)\n        (DOES IT PLEASE YOU TO BELIEVE I AM 4)\n        (DO YOU SOMETIMES WISH YOU WERE 4)\n        (PERHAPS YOU WOULD LIKE TO BE 4))\n    ((0 I 0 YOU)\n        (WHY DO YOU THINK I 3 YOU)\n        (YOU LIKE TO THINK I 3 YOU - DON'T YOU)\n        (WHAT MAKES YOU THINK I 3 YOU)\n        (REALLY, I 3 YOU)\n        (DO YOU WISH TO BELIEVE I 3 YOU)\n; duplicate line removed: (REALLY, I 3 YOU) (DO YOU WISH TO BELIEVE I 3 YOU)\n        (SUPPOSE I DID 3 YOU - WHAT WOULD THAT MEAN)\n        (DOES SOMEONE ELSE BELIEVE I 3 YOU))\n    ((0 I 0)\n        (WE WERE DISCUSSING YOU - NOT ME)\n        (OH, I 3)\n        (YOU'RE NOT REALLY TALKING ABOUT ME - ARE YOU)\n        (WHAT ARE YOUR FEELINGS NOW)))\n\n(YES\n    ((0)\n        (YOU SEEM QUITE POSITIVE)\n        (YOU ARE SURE)\n        (I SEE)\n        (I UNDERSTAND)))\n\n(NO\n    ((0)\n        (ARE YOU SAYING 'NO' JUST TO BE NEGATIVE)\n        (YOU ARE BEING A BIT NEGATIVE)\n        (WHY NOT)\n        (WHY 'NO')))\n\n(MY = YOUR 2\n    ((0 YOUR 0 (/FAMILY) 0)\n        (TELL ME MORE ABOUT YOUR FAMILY)\n        (WHO ELSE IN YOUR FAMILY 5)\n        (YOUR 4)\n        (WHAT ELSE COMES TO MIND WHEN YOU THINK OF YOUR 4))\n    ((0 YOUR 0)\n        (YOUR 3)\n        (WHY DO YOU SAY YOUR 3)\n        (DOES THAT SUGGEST ANYTHING ELSE WHICH BELONGS TO YOU)\n        (IS IT IMPORTANT TO YOU THAT 2 3)))\n\n(CAN\n    ((0 CAN I 0)\n        (YOU BELIEVE I CAN 4 DON'T YOU)\n        (=WHAT)\n        (YOU WANT ME TO BE ABLE TO 4)\n        (PERHAPS YOU WOULD LIKE TO BE ABLE TO 4 YOURSELF))\n    ((0 CAN YOU 0)\n        (WHETHER OR NOT YOU CAN 4 DEPENDS ON YOU MORE THAN ON ME)\n        (DO YOU WANT TO BE ABLE TO 4)\n        (PERHAPS YOU DON'T WANT TO 4)\n        (=WHAT)))\n\n(WHAT\n    ((0)\n        (WHY DO YOU ASK)\n        (DOES THAT QUESTION INTEREST YOU)\n        (WHAT IS IT YOU REALLY WANT TO KNOW)\n        (ARE SUCH QUESTIONS MUCH ON YOUR MIND)\n        (WHAT ANSWER WOULD PLEASE YOU MOST)\n        (WHAT DO YOU THINK)\n        (WHAT COMES TO YOUR MIND WHEN YOU ASK THAT)\n        (HAVE YOU ASKED SUCH QUESTIONS BEFORE)\n        (HAVE YOU ASKED ANYONE ELSE)))\n\n(BECAUSE\n    ((0)\n        (IS THAT THE REAL REASON)\n        (DON'T ANY OTHER REASONS COME TO MIND)\n        (DOES THAT REASON SEEM TO EXPLAIN ANYTHING ELSE)\n        (WHAT OTHER REASONS MIGHT THERE BE)))\n\n(WHY\n    ((0 WHY DON'T I 0)\n        (DO YOU BELIEVE I DON'T 5)\n        (PERHAPS I WILL 5 IN GOOD TIME)\n        (SHOULD YOU 5 YOURSELF)\n        (YOU WANT ME TO 5)\n        (=WHAT))\n; duplicate line removed: (=WHAT))\n    ((0 WHY CAN'T YOU 0)\n        (DO YOU THINK YOU SHOULD BE ABLE TO 5)\n        (DO YOU WANT TO BE ABLE TO 5)\n        (DO YOU BELIEVE THIS WILL HELP YOU TO 5)\n        (HAVE YOU ANY IDEA WHY YOU CAN'T 5)\n        (=WHAT))\n    (=WHAT))\n\n(EVERYONE 2\n    ((0 (* EVERYONE EVERYBODY NOBODY NOONE) 0)\n        (REALLY, 2)\n        (SURELY NOT 2)\n        (CAN YOU THINK OF ANYONE IN PARTICULAR)\n        (WHO, FOR EXAMPLE)\n        (YOU ARE THINKING OF A VERY SPECIAL PERSON)\n        (WHO, MAY I ASK)\n        (SOMEONE SPECIAL PERHAPS)\n        (YOU HAVE A PARTICULAR PERSON IN MIND, DON'T YOU)\n        (WHO DO YOU THINK YOU'RE TALKING ABOUT)))\n\n(EVERYBODY 2 (= EVERYONE))\n(NOBODY 2 (= EVERYONE))\n(NOONE 2 (= EVERYONE))\n\n(ALWAYS 1\n    ((0)\n        (CAN YOU THINK OF A SPECIFIC EXAMPLE)\n        (WHEN)\n        (WHAT INCIDENT ARE YOU THINKING OF)\n        (REALLY, ALWAYS)))\n\n(LIKE 10\n    ((0 (*AM IS ARE WAS) 0 LIKE 0)\n        (=DIT))\n    ((0)\n        (NEWKEY)))\n\n(DIT\n    ((0)\n        (IN WHAT WAY)\n        (WHAT RESEMBLANCE DO YOU SEE)\n        (WHAT DOES THAT SIMILARITY SUGGEST TO YOU)\n        (WHAT OTHER CONNECTIONS DO YOU SEE)\n        (WHAT DO YOU SUPPOSE THAT RESEMBLANCE MEANS)\n        (WHAT IS THE CONNECTION, DO YOU SUPPOSE)\n        (COULD THERE REALLY BE SOME CONNECTION)\n        (HOW)))\n\n()\n\n; --- End of ELIZA script ---\n";
+const GESPRAECH_1966 = [["Men are all alike.", "IN WHAT WAY"], ["They're always bugging us about something or other.", "CAN YOU THINK OF A SPECIFIC EXAMPLE"], ["Well, my boyfriend made me come here.", "YOUR BOYFRIEND MADE YOU COME HERE"], ["He says I'm depressed much of the time.", "I AM SORRY TO HEAR YOU ARE DEPRESSED"], ["It's true. I am unhappy.", "DO YOU THINK COMING HERE WILL HELP YOU NOT TO BE UNHAPPY"], ["I need some help, that much seems certain.", "WHAT WOULD IT MEAN TO YOU IF YOU GOT SOME HELP"], ["Perhaps I could learn to get along with my mother.", "TELL ME MORE ABOUT YOUR FAMILY"], ["My mother takes care of me.", "WHO ELSE IN YOUR FAMILY TAKES CARE OF YOU"], ["My father.", "YOUR FATHER"], ["You are like my father in some ways.", "WHAT RESEMBLANCE DO YOU SEE"], ["You are not very aggressive but I think you don't want me to notice that.", "WHAT MAKES YOU THINK I AM NOT VERY AGGRESSIVE"], ["You don't argue with me.", "WHY DO YOU THINK I DON'T ARGUE WITH YOU"], ["You are afraid of me.", "DOES IT PLEASE YOU TO BELIEVE I AM AFRAID OF YOU"], ["My father is afraid of everybody.", "WHAT ELSE COMES TO MIND WHEN YOU THINK OF YOUR FATHER"], ["Bullies.", "DOES THAT HAVE ANYTHING TO DO WITH THE FACT THAT YOUR BOYFRIEND MADE YOU COME HERE"]];
+</script>
+<script>
+(function () {
+  "use strict";
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  };
+  const eliza = new Eliza(DOCTOR);
+  const log = $("#log");
+  const xray = $("#xray");
+  let busy = false;
+  $("#script").textContent = DOCTOR.split("\n").filter((l) => !l.trim().startsWith(";")).join("\n").trim();
+  xray.checked = store.get("eliza-xray", false);
+  xray.addEventListener("change", () => {
+    store.set("eliza-xray", xray.checked);
+    log.querySelectorAll(".x").forEach((el) => (el.hidden = !xray.checked));
+  });
+
+  const add = (cls, text) => { const d = document.createElement("div"); d.className = cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; };
+  const pat = (p) => p.map((t) => (Array.isArray(t) ? "(" + t.join(" ") + ")" : t)).join(" ");
+  const tpl = (t) => t.map((w) => (/^\d+$/.test(w) ? `<span class="hl">${w}</span>` : esc(w))).join(" ");
+  const parts = (ps) => ps.map((p, i) => `${p ? esc(p) : "–"}<sup>${i + 1}</sup>`).join('<span class="sep">|</span>');
+
+  // Röntgenblick: in wenigen Zeilen, was das Programm getan hat
+  function explain(tr) {
+    const L = [];
+    if (tr.mode === "memory") {
+      L.push(`<b>Kein Schlüsselwort.</b> ELIZA holt einen Satz hervor, den sie sich früher bei MY gemerkt hat.`);
+      return L;
+    }
+    if (!tr.keywords.length) {
+      L.push(`<b>Kein Schlüsselwort.</b> ELIZA nimmt eine Ausweichantwort aus der Liste NONE.`);
+      return L;
+    }
+    const kws = tr.keywords.map((k) => `<code>${esc(k.word)}</code> (Rang ${k.rank})`).join(", ");
+    L.push(`<b>Schlüsselwort:</b> ${kws}`);
+    if (tr.substitutions.length) L.push(`<b>Umgestellt:</b> <code>${esc(tr.clause.join(" "))}</code>`);
+    for (const s of tr.steps) {
+      if (s.link && !s.decomp) { L.push(`<b>Verweis:</b> <code>${esc(s.key)}</code> hat keine eigenen Regeln, weiter bei <code>${esc(s.link)}</code>`); continue; }
+      if (!s.decomp) continue;
+      L.push(`<b>Muster</b> <code>(${esc(pat(s.decomp))})</code> zerlegt den Satz: <span class="p">${parts(s.parts)}</span>`);
+      if (s.newkey) L.push(`<b>Vorlage</b> <code>NEWKEY</code>: nächstes Schlüsselwort versuchen`);
+      else if (s.pre) L.push(`<b>Vorlage</b> <code>(PRE …)</code> baut den Satz um zu <code>${esc(s.pre.result.join(" "))}</code>, weiter bei <code>${esc(s.pre.linkTo)}</code>`);
+      else if (s.linkTo) L.push(`<b>Vorlage</b> <code>(=${esc(s.linkTo)})</code>: weiter mit den Regeln von <code>${esc(s.linkTo)}</code>`);
+      else L.push(`<b>Vorlage</b> <code>(${tpl(s.reasm)})</code>${s.count > 1 ? ` <span style="color:#8A8A8A">(Antwort ${s.index + 1} von ${s.count}; beim nächsten Mal die nächste)</span>` : ""}`);
+    }
+    if (tr.mode === "none") L.push(`Keine Regel passte: Ausweichantwort aus der Liste NONE.`);
+    if (tr.mode === "nomatch") L.push(`Keine Regel passte: eine der fest eingebauten Notantworten.`);
+    if (tr.memoryCreated) L.push(`<b>ELIZA merkt sich für später:</b> <code>${esc(tr.memoryCreated)}</code>`);
+    return L;
+  }
+
+  function typeOut(text, done) {
+    const el = add("bot", "");
+    let i = 0;
+    (function step() {
+      el.textContent = text.slice(0, ++i);
+      log.scrollTop = log.scrollHeight;
+      if (i < text.length) setTimeout(step, 16); else done(el);
+    })();
+  }
+
+  function say(text, cb) {
+    add("user", text);
+    const { reply, trace } = eliza.respond(text);
+    busy = true;
+    setTimeout(() => typeOut(reply, (el) => {
+      const x = document.createElement("div");
+      x.className = "x"; x.hidden = !xray.checked;
+      x.innerHTML = explain(trace).map((l) => `<div>${l}</div>`).join("");
+      el.after(x);
+      log.scrollTop = log.scrollHeight;
+      busy = false;
+      if (cb) cb(reply);
+    }), 250);
+  }
+
+  function greet() { log.innerHTML = ""; eliza.reset(); add("bot", eliza.greeting); }
+  greet();
+  $("#form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const v = $("#inp").value.trim();
+    if (!v || busy) return;
+    $("#inp").value = "";
+    say(v);
+  });
+  $("#reset").addEventListener("click", () => { if (!busy) greet(); });
+  $("#replay").addEventListener("click", () => {
+    if (busy) return;
+    log.innerHTML = ""; eliza.reset();
+    add("note-line", "Das Gespräch aus Weizenbaum (1966), S. 36 f. Die Antworten erzeugt das Skript jetzt neu.");
+    let i = 0, same = 0;
+    (function next() {
+      if (i >= GESPRAECH_1966.length) { add("note-line", `${same} von ${GESPRAECH_1966.length} Antworten stimmen wörtlich mit dem Abdruck von 1966 überein.`); return; }
+      const [s, orig] = GESPRAECH_1966[i++];
+      say(s, (r) => { if (r === orig) same++; setTimeout(next, 450); });
+    })();
+  });
+  ["I am unhappy.", "My mother takes care of me.", "I dreamed about a bird.", "You are like my father.", "I am not unhappy.", "What is the capital of France?", "Sprechen Sie Deutsch?"]
+    .forEach((s) => { const b = document.createElement("button"); b.type = "button"; b.textContent = s; b.onclick = () => { $("#inp").value = s; $("#inp").focus(); }; $("#tries").appendChild(b); });
+})();
+</script>
+</body>
+</html>
